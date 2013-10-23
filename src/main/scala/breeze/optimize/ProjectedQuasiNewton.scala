@@ -141,6 +141,8 @@ class ProjectedQuasiNewton(val optTol: Double = 1e-3,
 
 
   protected def determineStepSize(state: State, fn: DiffFunction[DenseVector[Double]], dir: DenseVector[Double]): Double = {
+    if (state.iter == 0)
+      return scala.math.min(1.0, 1.0 / state.grad.norm(1.0))
     val dirnorm = dir.norm(Double.PositiveInfinity)
     if(dirnorm < 1E-10) return 0.0
     import state._
