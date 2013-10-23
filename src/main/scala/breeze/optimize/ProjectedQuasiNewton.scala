@@ -71,6 +71,14 @@ class ProjectedQuasiNewton(val optTol: Double = 1e-3,
                            val maxSrchIt: Int = 30,
                            val gamma: Double = 1e-10,
                            val projection: DenseVector[Double] => DenseVector[Double] = identity) extends FirstOrderMinimizer[DenseVector[Double], DiffFunction[DenseVector[Double]]] with Logging {
+  val innerOptimizer = new SpectralProjectedGradient(
+    testOpt = true,
+    optTol = optTol * 1.0e-10,
+    maxNumIt = 500,
+    initFeas = true,
+    M = 10,
+    projection = projection
+  )
 
   type History = CompactHessian
 
@@ -91,15 +99,8 @@ class ProjectedQuasiNewton(val optTol: Double = 1e-3,
       // Update the limited-memory BFGS approximation to the Hessian
       //B.update(y, s)
       // Solve subproblem; we use the current iterate x as a guess
-      val subprob = new ProjectedQuasiNewton.QuadraticSubproblem(fn, state.adjustedValue, x, grad, B)
-      val p = new SpectralProjectedGradient(
-        testOpt = false,
-        optTol = 1e-3,
-        maxNumIt = 30,
-        initFeas = true,
-        M = 5,
-        projection = projection
-      ).minimize(subprob, x)
+      val subprob = new ProjectedQuasiNewton.QuadraticSubproblem(fn, state.adjustedValue, x, grad, history)
+      val p = innerOptimizer.minimize(new CachedDiffFunction(subprob), x)
       p - x
       //	time += subprob.time
     }
