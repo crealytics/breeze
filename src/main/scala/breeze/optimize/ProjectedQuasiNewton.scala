@@ -61,16 +61,14 @@ class CompactHessian(M: DenseMatrix[Double], Y: RingBuffer[DenseVector[Double]],
   lazy val N = DenseMatrix.horzcat(S.t * sigma, Y.t)
 }
 
-
-
-class ProjectedQuasiNewton(val optTol: Double = 1e-3,
+class ProjectedQuasiNewton(val optTol: Double = 1e-6,
                            val m: Int = 10,
                            val initFeas: Boolean = false,
                            val testOpt: Boolean = true,
-                           val maxNumIt: Int = 2000,
-                           val maxSrchIt: Int = 30,
-                           val gamma: Double = 1e-10,
-                           val projection: DenseVector[Double] => DenseVector[Double] = identity) extends FirstOrderMinimizer[DenseVector[Double], DiffFunction[DenseVector[Double]]] with Logging {
+                           val maxNumIt: Int = 500,
+                           val maxSrchIt: Int = 50,
+                           val gamma: Double = 1e-4,
+                           val projection: DenseVector[Double] => DenseVector[Double] = identity) extends FirstOrderMinimizer[DenseVector[Double], DiffFunction[DenseVector[Double]]](maxIter = maxNumIt) with Logging {
   val innerOptimizer = new SpectralProjectedGradient(
     testOpt = true,
     optTol = optTol * 1.0e-10,
