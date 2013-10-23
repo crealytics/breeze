@@ -91,8 +91,7 @@ class ProjectedQuasiNewton(val optTol: Double = 1e-6,
   protected def chooseDescentDirection(state: State, fn: DiffFunction[DenseVector[Double]]): DenseVector[Double] = {
     import state._
     if (iter == 0) {
-      val gnorm = computeGradientNorm(x, grad)
-      computeGradient(x, grad * (0.1 / gnorm))
+      computeGradient(x, grad)
     } else {
       // Update the limited-memory BFGS approximation to the Hessian
       //B.update(y, s)
