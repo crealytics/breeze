@@ -106,11 +106,11 @@ class ProjectedQuasiNewton(val optTol: Double = 1e-3,
                            val gamma: Double = 1e-10,
                            val projection: DenseVector[Double] => DenseVector[Double] = identity) extends FirstOrderMinimizer[DenseVector[Double], DiffFunction[DenseVector[Double]]] with Logging {
 
-  case class History(B: CompactHessian)
+  type History = CompactHessian
 
 
   protected def initialHistory(f: DiffFunction[DenseVector[Double]], init: DenseVector[Double]): History = {
-    History(new CompactHessian(m))
+    new CompactHessian(m)
   }
 
   private def computeGradient(x: DenseVector[Double], g: DenseVector[Double]): DenseVector[Double] = projection(x - g) - x
@@ -118,7 +118,6 @@ class ProjectedQuasiNewton(val optTol: Double = 1e-3,
 
   protected def chooseDescentDirection(state: State, fn: DiffFunction[DenseVector[Double]]): DenseVector[Double] = {
     import state._
-    import history.B
     if (iter == 1) {
       val gnorm = computeGradientNorm(x, grad)
       computeGradient(x, grad * (0.1 / gnorm))
@@ -187,7 +186,7 @@ class ProjectedQuasiNewton(val optTol: Double = 1e-3,
     import oldState._
     val s = newX - oldState.x
     val y = newGrad - oldState.grad
-    History(oldState.history.B.update(y, s))
+    oldState.history.update(y, s)
   }
 
 }
