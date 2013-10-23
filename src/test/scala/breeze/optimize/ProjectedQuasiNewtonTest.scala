@@ -74,21 +74,21 @@ class ProjectedQuasiNewtonTest extends PropSpec with PropertyChecks with ShouldM
   }
 
   property("optimize a complicated function without projection") {
-    val optimizer = new ProjectedQuasiNewton(optTol = 1.0E-15, projection = identity)
+    val optimizer = new ProjectedQuasiNewton(optTol = 1.0E-5)
 
     forAll { a: DenseVector[Double] =>
-      val init = DenseVector.rand(a.size)
-      val f = new DiffFunction[DenseVector[Double]] {
-        def calculate(x: DenseVector[Double]) = {
-          (breeze.numerics.exp((x :^ 2.0) :- (a :* x)).sum, (x * 2.0 :- a) :* breeze.numerics.exp(x :^ 2.0 :- a :* x))
+      whenever(a.min >= -3.0 && a.max <= 3.0) {
+        val init = DenseVector.rand(a.size)
+        val f = new DiffFunction[DenseVector[Double]] {
+          def calculate(x: DenseVector[Double]) = {
+            (breeze.numerics.exp((x :^ 2.0) :- (a :* x)).sum, (x * 2.0 :- a) :* breeze.numerics.exp(x :^ 2.0 :- a :* x))
+          }
         }
+
+        val result = optimizer.minimize(f, init)
+        val minimum = f(a / 2.0)
+        f(result) should be(minimum plusOrMinus abs(minimum) * 1E-2)
       }
-
-      val result = optimizer.minimize(f, init)
-      val minimum = f(a / 2.0)
-      f(result) should be(minimum plusOrMinus abs(minimum) * 1.0e-2)
-      result should beSimilarTo(a / 2.0, allowedDeviation = 1E-3)
     }
-
   }
 }
