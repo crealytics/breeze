@@ -21,6 +21,7 @@ import org.scalatest.prop._
 import org.scalacheck._
 import org.junit.runner.RunWith
 import org.scalatest.matchers.ShouldMatchers
+import scala.math._
 
 import breeze.linalg._
 
@@ -70,5 +71,24 @@ class ProjectedQuasiNewtonTest extends PropSpec with PropertyChecks with ShouldM
       val result = optimizer.minimize(DiffFunction.withL2Regularization(f, 1.0), init)
       result should beSimilarTo(DenseVector.ones[Double](init.size) * targetValue, allowedDeviation = 3E-3 * result.size)
     }
+  }
+
+  property("optimize a complicated function without projection") {
+    val optimizer = new ProjectedQuasiNewton(optTol = 1.0E-15, projection = identity)
+
+    forAll { a: DenseVector[Double] =>
+      val init = DenseVector.rand(a.size)
+      val f = new DiffFunction[DenseVector[Double]] {
+        def calculate(x: DenseVector[Double]) = {
+          (breeze.numerics.exp((x :^ 2.0) :- (a :* x)).sum, (x * 2.0 :- a) :* breeze.numerics.exp(x :^ 2.0 :- a :* x))
+        }
+      }
+
+      val result = optimizer.minimize(f, init)
+      val minimum = f(a / 2.0)
+      f(result) should be(minimum plusOrMinus abs(minimum) * 1.0e-2)
+      result should beSimilarTo(a / 2.0, allowedDeviation = 1E-3)
+    }
+
   }
 }
