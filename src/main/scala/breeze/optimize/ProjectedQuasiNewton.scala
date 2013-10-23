@@ -10,7 +10,7 @@ class CompactHessian(M: DenseMatrix[Double], Y: RingBuffer[DenseVector[Double]],
   def repr: CompactHessian = this
   implicit def collectionOfVectorsToMatrix(coll: Seq[DenseVector[Double]]) =
     DenseMatrix.tabulate(coll.size, coll.headOption.map(_.size).getOrElse(0)) { case (i, j) => coll(i)(j) }
-  def update(y: DenseVector[Double],
+  def updated(y: DenseVector[Double],
              s: DenseVector[Double]):CompactHessian = {
     // Compute scaling factor for initial Hessian, which we choose as
     val yTs = y.dot(s)
@@ -49,7 +49,7 @@ class CompactHessian(M: DenseMatrix[Double], Y: RingBuffer[DenseVector[Double]],
     newB
   }
 
-  def times(v: DenseVector[Double]): DenseVector[Double] = {
+  def *(v: DenseVector[Double]): DenseVector[Double] = {
     if (Y.size == 0) {
       v
     } else {
@@ -153,7 +153,7 @@ class ProjectedQuasiNewton(val optTol: Double = 1e-6,
     import oldState._
     val s = newX - oldState.x
     val y = newGrad - oldState.grad
-    oldState.history.update(y, s)
+    oldState.history.updated(y, s)
   }
 
 }
@@ -174,7 +174,7 @@ object ProjectedQuasiNewton {
      */
     override def calculate(x: DenseVector[Double]): (Double, DenseVector[Double]) = {
       val d = x - xk
-      val Bd = B.times(d)
+      val Bd = B * d
       val f = fk + d.dot(gk) + (0.5 * d.dot(Bd))
       val g = gk + Bd
       (f, g)
