@@ -19,7 +19,7 @@ class CompactHessian(M: DenseMatrix[Double], Y: RingBuffer[DenseVector[Double]],
 
     val S = this.S :+ s
     val Y = this.Y :+ y
-    val sigma = 1.0 / (yTs / y.dot(y))
+    val sigma = y.dot(y) / yTs
 
     val k = Y.size
 
