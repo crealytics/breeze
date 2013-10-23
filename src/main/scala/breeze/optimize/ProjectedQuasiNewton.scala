@@ -8,7 +8,8 @@ import breeze.collection.mutable.RingBuffer
 class CompactHessian(M: DenseMatrix[Double], Y: RingBuffer[DenseVector[Double]], S: RingBuffer[DenseVector[Double]], sigma: Double, m: Int) extends NumericOps[CompactHessian] {
   def this(m: Int) = this(null, new RingBuffer(m), new RingBuffer(m), 1.0, m)
   def repr: CompactHessian = this
-
+  implicit def collectionOfVectorsToMatrix(coll: Seq[DenseVector[Double]]) =
+    DenseMatrix.tabulate(coll.size, coll.headOption.map(_.size).getOrElse(0)) { case (i, j) => coll(i)(j) }
   def update(y: DenseVector[Double],
              s: DenseVector[Double]):CompactHessian = {
     // Compute scaling factor for initial Hessian, which we choose as
@@ -35,12 +36,9 @@ class CompactHessian(M: DenseMatrix[Double], Y: RingBuffer[DenseVector[Double]],
         0.0
       }
     }
-
+    val SM = collectionOfVectorsToMatrix(S)
     // S_k^T S_k is the symmetric k x k matrix with element (i,j) given by <s_i, s_j>
-    val STS = DenseMatrix.tabulate[Double](k, k){ (i, j) =>
-      sigma * (S(i) dot S(j))
-    }
-
+    val STS = (SM * SM.t) * sigma
 
     // M is the 2k x 2k matrix given by: M = [ \sigma * S_k^T S_k    L_k ]
     //                                       [         L_k^T        -D_k ]
@@ -55,44 +53,12 @@ class CompactHessian(M: DenseMatrix[Double], Y: RingBuffer[DenseVector[Double]],
     if (Y.size == 0) {
       v
     } else {
-      val temp = v * sigma
-      subtractNv(temp, M \ (NTv(v)))
+      val nTv = N.t * v.toDenseMatrix.t
+      val u = (N * (M \ nTv)).toDenseVector
+      v * sigma - u
     }
   }
-
-  // Returns a 2k x 1 matrix
-  def NTv(v: DenseVector[Double]): DenseMatrix[Double] = {
-    val ntv = DenseMatrix.zeros[Double](2 * Y.size, 1)
-
-    val f1 = {
-      var i = 0
-      for (s <- S) {
-        ntv.update(i, 0, s.dot(v) * sigma)
-        i += 1
-      }
-    }
-    val f2 =  {
-      var i = S.size
-      for (y <- Y) {
-        ntv.update(i, 0, y.dot(v))
-        i += 1
-      }
-    }
-    return ntv
-  }
-
-  def subtractNv(subFrom: DenseVector[Double], v: Matrix[Double]): DenseVector[Double] = {
-    var i = 0
-    for (s <- S) {
-      subFrom := subFrom + s * (-sigma * v(i, 0))
-      i += 1
-    }
-    for (y <- Y) {
-      subFrom := subFrom + y * (-v(i, 0))
-      i += 1
-    }
-    return subFrom
-  }
+  lazy val N = DenseMatrix.horzcat(S.t * sigma, Y.t)
 }
 
 
