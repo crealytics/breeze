@@ -52,16 +52,12 @@ class SpectralProjectedGradient[T, -DF <: StochasticDiffFunction[T]](
     var x = if (initFeas) copy(init) else projection(copy(init))
 
     var alpha: Double = 1.0 //0.001 / gnorm
-    var fmax = IndexedSeq.empty[Double]
     var iter = 0
     var iterationsExhausted = false
     var grad = f.gradientAt(x)
     var value = f.valueAt(x)
-    var xOld: T = x
-    var gOld: T = grad
-    var fOld: Double = Double.PositiveInfinity
     var funEvals = 1
-    var currentState = State(xOld, fOld, gOld, fOld, gOld, iter, fOld, alpha, fmax, 0, false)
+    var currentState = initialState(f, init)
     breakable {
       while (funEvals < maxIter) {
         if (iter == 0) {
@@ -70,10 +66,7 @@ class SpectralProjectedGradient[T, -DF <: StochasticDiffFunction[T]](
           alpha = updateHistory(x, grad, value, f, currentState)
         }
         var d = grad * -alpha
-        fOld = value
-        xOld = x
-        gOld = grad
-        fmax = updateFValWindow(currentState, value)
+        var fmax = updateFValWindow(currentState, value)
         currentState = State(x, value, grad, value, grad, iter, value, alpha, fmax, 0, false)
         d = correctedVector(x, d)
         val gtd = grad.dot(d)
@@ -84,7 +77,6 @@ class SpectralProjectedGradient[T, -DF <: StochasticDiffFunction[T]](
         } else {
           1.0
         }
-        fmax = fmax :+ value
         // Backtracking line-search
         val res = determineStepSize(currentState, f, d)//nonMonotoneLineSearch(x, f, d, grad, funRef, value, t)
         x = x + d * t
@@ -96,7 +88,7 @@ class SpectralProjectedGradient[T, -DF <: StochasticDiffFunction[T]](
           break
         if (norm(d * t, 1) < tolerance)
           break
-        if (scala.math.abs(value - fOld) < tolerance)
+        if (scala.math.abs(value - currentState.value) < tolerance)
           break
         iter = iter + 1
       }
@@ -106,7 +98,6 @@ class SpectralProjectedGradient[T, -DF <: StochasticDiffFunction[T]](
   }
   protected def determineStepSize(state: State, f: DF, direction: T): Double = {
     import state._
-//  def nonMonotoneLineSearch(x: T, f: DF, direction: T, g: T, funRef: Double, currentF: Double, initialAlpha: Double = 1.0) = {
     val funRef = fVals.max
     var lineSearchIters = 0
     var t = history
