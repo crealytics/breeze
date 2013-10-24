@@ -20,106 +20,118 @@ import scala.util.control.Breaks._
  * @param maxSrchIt maximum number of line search attempts
  * @param projection projection operations
  */
-class SpectralProjectedGradient[T](
+class SpectralProjectedGradient[T, -DF <: StochasticDiffFunction[T]](
   val projection: T => T = { (t: T) => t },
-  val optTol: Double = 1e-6,
+  tolerance: Double = 1e-6,
   val suffDec: Double = 1e-4,
-  val M: Int = 10,
+  minImprovementWindow: Int = 10,
   val alphaMax: Double = 1e10,
   val alphaMin: Double = 1e-10,
-  val maxNumIt: Int = 500,
+  maxIter: Int = 500,
   val testOpt: Boolean = true,
   val initFeas: Boolean = false,
-  val maxSrchIt: Int = 30)(implicit coord: MutableCoordinateSpace[T, Double]) extends Minimizer[T, DiffFunction[T]] with Logging {
+  val maxSrchIt: Int = 30)(implicit coord: MutableCoordinateSpace[T, Double]) extends FirstOrderMinimizer[T, DF](minImprovementWindow = minImprovementWindow, maxIter = maxIter, tolerance = tolerance) with Logging {
   import coord._
-  override def minimize(prob: DiffFunction[T], guess: T): T = {
-    def correctedGradient(x: T, g: T): T = projection(x + g) - x
+  type History = Double
+  def correctedVector(x: T, g: T): T = projection(x + g) - x
+  protected def initialHistory(f: DF, init: T): History = 1.0
+  protected def chooseDescentDirection(state: State, f: DF): T = ???
+  protected def takeStep(state: State, dir: T, stepSize: Double): T = ???
+  protected def updateHistory(newX: T, newGrad: T, newVal: Double, f: DF, oldState: State): History = {
+    val y = newGrad - oldState.grad
+    val s = newX - oldState.x
+    val alpha = s.dot(s) / s.dot(y)
+    if (alpha < alphaMin || alpha > alphaMax)
+      1
+    else
+      alpha
+  }
+
+  override def minimize(f: DF, init: T): T = {
     var gnorm: Double = 0.0
-    var x = if (initFeas) copy(guess) else projection(copy(guess))
+    var x = if (initFeas) copy(init) else projection(copy(init))
 
     var alpha: Double = 1.0 //0.001 / gnorm
-    var fmax = new RingBuffer[Double](M)
-    var i = 1
+    var fmax = IndexedSeq.empty[Double]
+    var iter = 0
     var iterationsExhausted = false
-    var g = prob.gradientAt(x)
-    var f = prob.valueAt(x)
+    var grad = f.gradientAt(x)
+    var value = f.valueAt(x)
     var xOld: T = x
-    var gOld: T = g
+    var gOld: T = grad
     var fOld: Double = Double.PositiveInfinity
     var funEvals = 1
+    var currentState = State(xOld, fOld, gOld, fOld, gOld, iter, fOld, alpha, fmax, 0, false)
     breakable {
-      while (funEvals < maxNumIt) {
-        if (i == 1) {
-          alpha = 1.0
+      while (funEvals < maxIter) {
+        if (iter == 0) {
+          alpha = initialHistory(f, init)
         } else {
-          val y = g - gOld
-          val s = x - xOld
-          alpha = s.dot(s) / s.dot(y)
-          if (alpha < alphaMin || alpha > alphaMax)
-            alpha = 1
+          alpha = updateHistory(x, grad, value, f, currentState)
         }
-        var d = g * -alpha
-        fOld = f
+        var d = grad * -alpha
+        fOld = value
         xOld = x
-        gOld = g
-        d = projection(x + d) - x
-        val gtd = g.dot(d)
-        if (gtd > -optTol)
+        gOld = grad
+        fmax = updateFValWindow(currentState, value)
+        currentState = State(x, value, grad, value, grad, iter, value, alpha, fmax, 0, false)
+        d = correctedVector(x, d)
+        val gtd = grad.dot(d)
+        if (gtd > -tolerance)
           break;
-        var t = if (i == 1) {
-          scala.math.min(1.0, (1.0 / norm(g, 1)))
+        var t = if (iter == 1) {
+          scala.math.min(1.0, (1.0 / norm(grad, 1)))
         } else {
           1.0
         }
-        fmax += f
+        fmax = fmax :+ value
         // Backtracking line-search
-        val funRef = fmax.max
-        val res = nonMonotoneLineSearch(x, prob, d, g, funRef, f, t)
-        x = res._1
-        f = res._2
-        g = res._3
-        funEvals += res._5
-        var optCond = norm(projection(x - g) - x, 1)
-        if(optCond < optTol)
+        val res = determineStepSize(currentState, f, d)//nonMonotoneLineSearch(x, f, d, grad, funRef, value, t)
+        x = x + d * t
+        value = f(x)
+        grad = f.gradientAt(x)
+        funEvals += 5
+        var optCond = norm(correctedVector(x, -grad), 1)
+        if (optCond < tolerance)
           break
-        if(norm(d*t,1) < optTol)
+        if (norm(d * t, 1) < tolerance)
           break
-        if(scala.math.abs(f - fOld) < optTol)
+        if (scala.math.abs(value - fOld) < tolerance)
           break
-        i = i + 1
+        iter = iter + 1
       }
     }
 
     x
   }
-
-  def nonMonotoneLineSearch(x: T, prob: DiffFunction[T], d: T, g: T, funRef: Double, f: Double, initialAlpha: Double = 1.0) = {
+  protected def determineStepSize(state: State, f: DF, direction: T): Double = {
+    import state._
+//  def nonMonotoneLineSearch(x: T, f: DF, direction: T, g: T, funRef: Double, currentF: Double, initialAlpha: Double = 1.0) = {
+    val funRef = fVals.max
     var lineSearchIters = 0
-    var t = initialAlpha
-    var xNew = x + d * t
-    var fNew = prob(xNew)
-    var gNew = prob.gradientAt(xNew)
+    var t = history
+    var xNew = x + direction * t
+    var fNew = f(xNew)
+    var gNew = f.gradientAt(xNew)
     var searchStep = xNew - x
-    var sufficientDecrease = g.dot(searchStep) * suffDec
+    var sufficientDecrease = grad.dot(searchStep) * suffDec
     var funEvals = 1
     breakable {
       while (fNew > funRef + sufficientDecrease) {
         var temp = t
         t = t / 2
-        if (norm(d * t, 1) < optTol || t == 0) {
+        if (norm(direction * t, 1) < tolerance || t == 0) {
           t = 0
-          fNew = f
-          gNew = g
           break
         }
-        xNew = x + d * t
-        fNew = prob(xNew)
-        gNew = prob.gradientAt(xNew)
+        xNew = x + direction * t
+        fNew = f(xNew)
+        gNew = f.gradientAt(xNew)
         funEvals += 1
         lineSearchIters += 1
       }
     }
-    (xNew, fNew, gNew, t, funEvals)
+    t
   }
 
 }
