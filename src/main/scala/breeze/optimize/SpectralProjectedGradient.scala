@@ -60,14 +60,8 @@ class SpectralProjectedGradient[T, -DF <: StochasticDiffFunction[T]](
     breakable {
       while (funEvals < maxIter) {
         val oldState = currentState
-        if (oldState.iter == 0) {
-          alpha = initialHistory(f, init)
-        } else {
-          alpha = updateHistory(x, grad, value, f, currentState)
-        }
         val fmax = updateFValWindow(currentState, value)
-        currentState = State(x, value, grad, value, grad,oldState.iter + 1, value, alpha, fmax, 0, false)
-        val d = correctedVector(x, grad * -alpha)
+        val d = correctedVector(x, grad * -oldState.history)
         val gtd = grad.dot(d)
         if (gtd > -tolerance)
           break;
@@ -76,6 +70,10 @@ class SpectralProjectedGradient[T, -DF <: StochasticDiffFunction[T]](
         } else {
           1.0
         }
+        if (oldState.iter > 0) {
+          alpha = updateHistory(x, grad, value, f, currentState)
+        }
+        currentState = State(x, value, grad, value, grad,oldState.iter + 1, value, alpha, fmax, 0, false)
         // Backtracking line-search
         val res = determineStepSize(currentState, f, d)
         x = x + d * res
