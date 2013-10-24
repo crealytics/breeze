@@ -52,7 +52,6 @@ class SpectralProjectedGradient[T, -DF <: StochasticDiffFunction[T]](
     var x = if (initFeas) copy(init) else projection(copy(init))
 
     var alpha: Double = 1.0 //0.001 / gnorm
-    var iter = 0
     var iterationsExhausted = false
     var grad = f.gradientAt(x)
     var value = f.valueAt(x)
@@ -60,26 +59,26 @@ class SpectralProjectedGradient[T, -DF <: StochasticDiffFunction[T]](
     var currentState = initialState(f, init)
     breakable {
       while (funEvals < maxIter) {
-        if (iter == 0) {
+        val oldState = currentState
+        if (oldState.iter == 0) {
           alpha = initialHistory(f, init)
         } else {
           alpha = updateHistory(x, grad, value, f, currentState)
         }
-        var d = grad * -alpha
-        var fmax = updateFValWindow(currentState, value)
-        currentState = State(x, value, grad, value, grad, iter, value, alpha, fmax, 0, false)
-        d = correctedVector(x, d)
+        val fmax = updateFValWindow(currentState, value)
+        currentState = State(x, value, grad, value, grad,oldState.iter + 1, value, alpha, fmax, 0, false)
+        val d = correctedVector(x, grad * -alpha)
         val gtd = grad.dot(d)
         if (gtd > -tolerance)
           break;
-        var t = if (iter == 1) {
+        var t = if (oldState.iter == 1) {
           scala.math.min(1.0, (1.0 / norm(grad, 1)))
         } else {
           1.0
         }
         // Backtracking line-search
-        val res = determineStepSize(currentState, f, d)//nonMonotoneLineSearch(x, f, d, grad, funRef, value, t)
-        x = x + d * t
+        val res = determineStepSize(currentState, f, d)
+        x = x + d * res
         value = f(x)
         grad = f.gradientAt(x)
         funEvals += 5
@@ -90,7 +89,6 @@ class SpectralProjectedGradient[T, -DF <: StochasticDiffFunction[T]](
           break
         if (scala.math.abs(value - currentState.value) < tolerance)
           break
-        iter = iter + 1
       }
     }
 
