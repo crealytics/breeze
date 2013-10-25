@@ -96,7 +96,11 @@ class SpectralProjectedGradient[T, -DF <: StochasticDiffFunction[T]](
     import state._
     val funRef = fVals.max
     var lineSearchIters = 0
-    var t = history
+    var t = if (iter == 0) {
+          scala.math.min(1.0, (1.0 / norm(grad, 1)))
+        } else {
+          1.0
+        }
     var xNew = x + direction * t
     var fNew = f(xNew)
     var gNew = f.gradientAt(xNew)
@@ -104,7 +108,7 @@ class SpectralProjectedGradient[T, -DF <: StochasticDiffFunction[T]](
     var sufficientDecrease = grad.dot(searchStep) * suffDec
     var funEvals = 1
     breakable {
-      while (fNew > funRef + sufficientDecrease) {
+      while (false && fNew > funRef + sufficientDecrease) {
         var temp = t
         t = t / 2
         if (norm(direction * t, 1) < tolerance || t == 0) {
