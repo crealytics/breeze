@@ -48,49 +48,37 @@ class SpectralProjectedGradient[T, -DF <: StochasticDiffFunction[T]](
   }
 
   override def minimize(f: DF, init: T): T = {
-    var gnorm: Double = 0.0
-    var x = if (initFeas) copy(init) else projection(copy(init))
+    val initX = if (initFeas) copy(init) else projection(copy(init))
 
-    var alpha: Double = 1.0 //0.001 / gnorm
-    var iterationsExhausted = false
-    var grad = f.gradientAt(x)
-    var value = f.valueAt(x)
     var funEvals = 1
-    var currentState = initialState(f, init)
+    var currentState = initialState(f, initX)
     breakable {
       while (funEvals < maxIter) {
         val oldState = currentState
-        val fmax = updateFValWindow(currentState, value)
-        val d = correctedVector(x, grad * -oldState.history)
-        val gtd = grad.dot(d)
+        val d = correctedVector(currentState.x, currentState.grad * -oldState.history)
+        val gtd = currentState.grad.dot(d)
         if (gtd > -tolerance)
           break;
-        var t = if (oldState.iter == 1) {
-          scala.math.min(1.0, (1.0 / norm(grad, 1)))
-        } else {
-          1.0
-        }
-        if (oldState.iter > 0) {
-          alpha = updateHistory(x, grad, value, f, currentState)
-        }
-        currentState = State(x, value, grad, value, grad,oldState.iter + 1, value, alpha, fmax, 0, false)
+
+        val fmax = updateFValWindow(currentState, currentState.value)
+        currentState = State(currentState.x, currentState.value, currentState.grad, currentState.value, currentState.grad,oldState.iter + 1, currentState.value, updateHistory(currentState.x, currentState.grad, currentState.value, f, currentState), fmax, 0, false)
         // Backtracking line-search
         val res = determineStepSize(currentState, f, d)
-        x = x + d * res
-        value = f(x)
-        grad = f.gradientAt(x)
+        val x = currentState.x + d * res
+        val value = f(x)
+        val grad = f.gradientAt(x)
         funEvals += 5
         var optCond = norm(correctedVector(x, -grad), 1)
         if (optCond < tolerance)
           break
-        if (norm(d * t, 1) < tolerance)
+        if (norm(d, 1) < tolerance)
           break
         if (scala.math.abs(value - currentState.value) < tolerance)
           break
       }
     }
 
-    x
+    currentState.x
   }
   protected def determineStepSize(state: State, f: DF, direction: T): Double = {
     import state._
