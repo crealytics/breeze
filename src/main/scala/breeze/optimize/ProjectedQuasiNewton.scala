@@ -71,7 +71,7 @@ class ProjectedQuasiNewton(val optTol: Double = 1e-6,
                            val projection: DenseVector[Double] => DenseVector[Double] = identity) extends FirstOrderMinimizer[DenseVector[Double], DiffFunction[DenseVector[Double]]](maxIter = maxNumIt) with Logging {
   val innerOptimizer = new SpectralProjectedGradient(
     testOpt = true,
-    tolerance = 1.0e-16,
+    tolerance = optTol,
     maxIter = 500,
     initFeas = true,
     minImprovementWindow = 10,

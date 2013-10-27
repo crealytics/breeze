@@ -36,6 +36,7 @@ class SpectralProjectedGradient[T, -DF <: StochasticDiffFunction[T]](
   def correctedVector(x: T, g: T): T = projection(x + g) - x
   protected def initialHistory(f: DF, init: T): History = 1.0
   protected def chooseDescentDirection(state: State, f: DF): T = correctedVector(state.x, state.grad * -state.history)
+  override protected def adjust(newX: T, newGrad: T, newVal: Double):(Double,T) = (newVal,-correctedVector(newX, - newGrad))
   protected def takeStep(state: State, dir: T, stepSize: Double): T = projection(state.x + dir * stepSize)
   protected def updateHistory(newX: T, newGrad: T, newVal: Double, f: DF, oldState: State): History = {
     val y = newGrad - oldState.grad
@@ -65,7 +66,7 @@ class SpectralProjectedGradient[T, -DF <: StochasticDiffFunction[T]](
     var sufficientDecrease = grad.dot(searchStep) * suffDec
     var funEvals = 1
     breakable {
-      while (false && fNew > funRef + sufficientDecrease) {
+      while (fNew > funRef + sufficientDecrease && lineSearchIters <= maxSrchIt) {
         var temp = t
         t = t / 2
         if (norm(direction * t, 1) < tolerance || t == 0) {
