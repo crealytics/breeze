@@ -3,6 +3,7 @@ package breeze.optimize
 import breeze.linalg._
 import com.typesafe.scalalogging.log4j.Logging
 import breeze.collection.mutable.RingBuffer
+import breeze.optimize.Projecting
 
 // Compact representation of an n x n Hessian, maintained via L-BFGS updates
 class CompactHessian(M: DenseMatrix[Double], Y: RingBuffer[DenseVector[Double]], S: RingBuffer[DenseVector[Double]], sigma: Double, m: Int) extends NumericOps[CompactHessian] {
@@ -68,7 +69,7 @@ class ProjectedQuasiNewton(val optTol: Double = 1e-6,
                            val maxNumIt: Int = 500,
                            val maxSrchIt: Int = 50,
                            val gamma: Double = 1e-4,
-                           val projection: DenseVector[Double] => DenseVector[Double] = identity) extends FirstOrderMinimizer[DenseVector[Double], DiffFunction[DenseVector[Double]]](maxIter = maxNumIt) with Logging {
+                           val projection: DenseVector[Double] => DenseVector[Double] = identity) extends FirstOrderMinimizer[DenseVector[Double], DiffFunction[DenseVector[Double]]](maxIter = maxNumIt) with Projecting[DenseVector[Double]] with Logging {
   val innerOptimizer = new SpectralProjectedGradient(
     testOpt = true,
     tolerance = optTol,
@@ -85,7 +86,7 @@ class ProjectedQuasiNewton(val optTol: Double = 1e-6,
     new CompactHessian(m)
   }
 
-  private def computeGradient(x: DenseVector[Double], g: DenseVector[Double]): DenseVector[Double] = projection(x - g) - x
+  private def computeGradient(x: DenseVector[Double], g: DenseVector[Double]): DenseVector[Double] = projectedVector(x, -g)
   private def computeGradientNorm(x: DenseVector[Double], g: DenseVector[Double]): Double = computeGradient(x, g).norm(Double.PositiveInfinity)
 
   protected def chooseDescentDirection(state: State, fn: DiffFunction[DenseVector[Double]]): DenseVector[Double] = {
