@@ -22,7 +22,7 @@ abstract class FirstOrderMinimizer[T,-DF<:StochasticDiffFunction[T]](maxIter: In
                    iter: Int,
                    initialAdjVal: Double,
                    history: History,
-                   fVals: IndexedSeq[Double] = IndexedSeq.empty,
+                   fVals: IndexedSeq[Double] = Vector(Double.PositiveInfinity),
                    numImprovementFailures: Int = 0,
                    searchFailed: Boolean = false) {
   }
@@ -83,7 +83,7 @@ abstract class FirstOrderMinimizer[T,-DF<:StochasticDiffFunction[T]](maxIter: In
     }
     }.takeUpToWhere ( state =>
       (state.iter >= maxIter && maxIter >= 0)
-        || (vspace.norm(state.adjustedGradient) <= math.max(tolerance * state.initialAdjVal.abs,1E-8))
+        || (!state.fVals.isEmpty && (state.adjustedValue - state.fVals.max).abs <= tolerance)
         || (state.numImprovementFailures >= numberOfImprovementFailures)
         || state.searchFailed
     )

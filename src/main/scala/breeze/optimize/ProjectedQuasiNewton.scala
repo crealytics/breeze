@@ -3,7 +3,6 @@ package breeze.optimize
 import breeze.linalg._
 import com.typesafe.scalalogging.log4j.Logging
 import breeze.collection.mutable.RingBuffer
-import breeze.optimize.Projecting
 
 // Compact representation of an n x n Hessian, maintained via L-BFGS updates
 class CompactHessian(M: DenseMatrix[Double], Y: RingBuffer[DenseVector[Double]], S: RingBuffer[DenseVector[Double]], sigma: Double, m: Int) extends NumericOps[CompactHessian] {
