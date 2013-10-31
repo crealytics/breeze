@@ -86,6 +86,8 @@ class ProjectedQuasiNewton(val optTol: Double = 1e-6,
     new CompactHessian(m)
   }
 
+  override protected def adjust(newX: DenseVector[Double], newGrad: DenseVector[Double], newVal: Double):(Double,DenseVector[Double]) = (newVal,-projectedVector(newX, -newGrad))
+
   private def computeGradient(x: DenseVector[Double], g: DenseVector[Double]): DenseVector[Double] = projectedVector(x, -g)
   private def computeGradientNorm(x: DenseVector[Double], g: DenseVector[Double]): Double = computeGradient(x, g).norm(Double.PositiveInfinity)
 
