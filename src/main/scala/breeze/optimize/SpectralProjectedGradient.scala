@@ -20,7 +20,7 @@ import scala.util.control.Breaks._
  * @param maxSrchIt maximum number of line search attempts
  * @param projection projection operations
  */
-class SpectralProjectedGradient[T, -DF <: StochasticDiffFunction[T]](
+class SpectralProjectedGradient[T, -DF <: DiffFunction[T]](
   val projection: T => T = { (t: T) => t },
   tolerance: Double = 1e-6,
   val suffDec: Double = 1e-4,
@@ -52,34 +52,33 @@ class SpectralProjectedGradient[T, -DF <: StochasticDiffFunction[T]](
   protected def determineStepSize(state: State, f: DF, direction: T): Double = {
     import state._
     val funRef = if (fVals.isEmpty) Double.PositiveInfinity else fVals.max
-    var t = if (iter == 0) {
+    val t = if (iter == 0) {
       scala.math.min(1.0, (1.0 / norm(grad, 1)))
     } else {
       1.0
     }
-    var lineSearchIters = 0
-    var xNew = x + direction * t
-    var fNew = f(xNew)
-    var gNew = f.gradientAt(xNew)
     val searchStep = direction * t
     val sufficientDecrease = grad.dot(searchStep) * suffDec
     val requiredValue = funRef + sufficientDecrease
 
-    breakable {
-      while (fNew > requiredValue && lineSearchIters <= maxSrchIt) {
-        var temp = t
-        t = t / 2
-        if (norm(direction * t, 1) < tolerance || t == 0) {
-          t = 0
-          break
-        }
-        xNew = x + direction * t
-        fNew = f(xNew)
-        gNew = f.gradientAt(xNew)
-        lineSearchIters += 1
-      }
-    }
-    t
+    val lineSearchFunction = LineSearch.functionFromSearchDirection(f, x, direction)
+    val ls = new SimpleLineSearch(requiredValue, maxSrchIt)
+    ls.minimize(lineSearchFunction, t)
   }
-
+  class SimpleLineSearch(requiredValue: Double, maxIterations: Int) extends ApproximateLineSearch {
+    def iterations(f: DiffFunction[Double], init: Double = 1.0): Iterator[State] = {
+      val (initfval, initfderiv) = f.calculate(init)
+      Iterator.iterate((State(init, initfval, initfderiv), 0)) {
+        case (State(alpha, fval, fderiv), iter) =>
+          val newAlpha = alpha / 2.0
+          val (fvalnew, fderivnew) = f.calculate(newAlpha)
+          (State(newAlpha, fvalnew, fderivnew), iter + 1)
+      }.takeWhile {
+        case (state, iterations) =>
+          (iterations == 0) ||
+            (iterations < maxIterations &&
+              state.value > requiredValue)
+      }.map(_._1)
+    }
+  }
 }
