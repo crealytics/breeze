@@ -52,20 +52,21 @@ class SpectralProjectedGradient[T, -DF <: StochasticDiffFunction[T]](
   protected def determineStepSize(state: State, f: DF, direction: T): Double = {
     import state._
     val funRef = if (fVals.isEmpty) Double.PositiveInfinity else fVals.max
-    var lineSearchIters = 0
     var t = if (iter == 0) {
       scala.math.min(1.0, (1.0 / norm(grad, 1)))
     } else {
       1.0
     }
+    var lineSearchIters = 0
     var xNew = x + direction * t
     var fNew = f(xNew)
     var gNew = f.gradientAt(xNew)
-    var searchStep = xNew - x
-    var sufficientDecrease = grad.dot(searchStep) * suffDec
-    var funEvals = 1
+    val searchStep = direction * t
+    val sufficientDecrease = grad.dot(searchStep) * suffDec
+    val requiredValue = funRef + sufficientDecrease
+
     breakable {
-      while (fNew > funRef + sufficientDecrease && lineSearchIters <= maxSrchIt) {
+      while (fNew > requiredValue && lineSearchIters <= maxSrchIt) {
         var temp = t
         t = t / 2
         if (norm(direction * t, 1) < tolerance || t == 0) {
@@ -75,7 +76,6 @@ class SpectralProjectedGradient[T, -DF <: StochasticDiffFunction[T]](
         xNew = x + direction * t
         fNew = f(xNew)
         gNew = f.gradientAt(xNew)
-        funEvals += 1
         lineSearchIters += 1
       }
     }
