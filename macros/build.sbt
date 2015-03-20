@@ -16,7 +16,7 @@ libraryDependencies ++= Seq(
 libraryDependencies <<= (scalaVersion, libraryDependencies) { (sv, deps) =>
   sv match {
     case x if x.startsWith("2.10") =>
-      deps :+ ("org.scalamacros" %% "quasiquotes" % "2.0.0-M8")
+      deps :+ ("org.scalamacros" %% "quasiquotes" % "2.0.1")
     case _ => deps
   }
 }
