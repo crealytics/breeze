@@ -95,9 +95,9 @@ abstract class FirstOrderMinimizer[T, DF<:StochasticDiffFunction[T]](val converg
     }
   }
 
-  def iterations(f: DF, init: T): Iterator[State] = {
+  def iterations(f: DF, init: T): Iterator[(State, Option[ConvergenceReason])] = {
     val adjustedFun = adjustFunction(f)
-    infiniteIterations(f, initialState(adjustedFun, init)).takeUpToWhere(convergenceCheck(_).isDefined)
+    infiniteIterations(f, initialState(adjustedFun, init)).map(s => (s,convergenceCheck(s))).takeUpToWhere(_._2.isDefined)
   }
 
   def minimize(f: DF, init: T): T = {
@@ -106,7 +106,7 @@ abstract class FirstOrderMinimizer[T, DF<:StochasticDiffFunction[T]](val converg
 
 
   def minimizeAndReturnState(f: DF, init: T):State = {
-    iterations(f, init).last
+    iterations(f, init).last._1
   }
 }
 
@@ -257,13 +257,13 @@ object FirstOrderMinimizer {
       } else { // L2
         new AdaptiveGradientDescent.L2Regularization[T](regularization, alpha,  maxIterations)(space, random)
       }
-      r.iterations(f,init)
+      r.iterations(f,init).map(_._1)
     }
 
     @deprecated("Use breeze.optimize.iterations(f, init, params) instead.", "0.10")
     def iterations[T, K](f: DiffFunction[T], init:T)(implicit space: MutableEnumeratedCoordinateField[T, K, Double]): Iterator[LBFGS[T]#State] = {
-       if(useL1) new OWLQN[K, T](maxIterations, 5, regularization, tolerance)(space).iterations(f,init)
-      else (new LBFGS[T](maxIterations, 5, tolerance=tolerance)(space)).iterations(DiffFunction.withL2Regularization(f,regularization),init)
+       if(useL1) new OWLQN[K, T](maxIterations, 5, regularization, tolerance)(space).iterations(f,init).map(_._1)
+      else (new LBFGS[T](maxIterations, 5, tolerance=tolerance)(space)).iterations(DiffFunction.withL2Regularization(f,regularization),init).map(_._1)
     }
   }
 }
