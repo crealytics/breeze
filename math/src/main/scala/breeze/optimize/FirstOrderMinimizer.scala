@@ -155,8 +155,8 @@ object FirstOrderMinimizer {
   case object MaxIterations extends ConvergenceReason {
     override def reason: String = "max iterations reached"
   }
-  case object FunctionValuesConverged extends ConvergenceReason {
-    override def reason: String = "function values converged"
+  case class FunctionValuesConverged(s: State[_, _], tolerance: Double, relative: Boolean) extends ConvergenceReason {
+    override def reason: String = s"function values converged with ${if (relative) "relative" else "absolute"} tolerance of $tolerance to ${s.adjustedValue}, last values: ${s.fVals}, initial adjusted value: ${s.initialAdjVal}"
   }
   case object GradientConverged extends ConvergenceReason {
     override def reason: String = "gradient converged"
@@ -174,11 +174,11 @@ object FirstOrderMinimizer {
   }
   def functionValuesConverged[T, History](tolerance: Double, relative: Boolean = true): ConvergenceCheck[T, History] = {
     case s: State[_, _] if (!s.fVals.isEmpty && (s.adjustedValue - s.fVals.max).abs <= tolerance * (if (relative) s.initialAdjVal else 1.0)) =>
-      FunctionValuesConverged
+      FunctionValuesConverged(s, tolerance, relative)
   }
   def objectiveNotImproving[T, History](tolerance: Double, relative: Boolean = true): ConvergenceCheck[T, History] = {
     case s: State[_, _] if (!s.fVals.isEmpty && (s.adjustedValue - s.fVals.max).abs <= tolerance * (if (relative) s.initialAdjVal else 1.0)) =>
-      FunctionValuesConverged
+      FunctionValuesConverged(s, tolerance, relative)
   }
   def gradientConverged[T, History](tolerance: Double, relative: Boolean = true)(implicit space: NormedModule[T, Double]): ConvergenceCheck[T, History] = {
     import space.normImpl
