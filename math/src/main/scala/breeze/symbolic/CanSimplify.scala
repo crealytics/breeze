@@ -82,7 +82,7 @@ trait LowPriorityCanSimplify extends LowestPriorityCanSimplify {
 
 trait HighPriorityCanSimplify extends LowPriorityCanSimplify {
 
-  implicit def canSimplifyEmptySum = new CanSimplify[Sum[HNil]] {
+  implicit val canSimplifyEmptySum = new CanSimplify[Sum[HNil]] {
     type R = ConstZero
     def simplify(f: Sum[HNil]) = ConstZero()
     override def toString = "empty Sum"
@@ -183,7 +183,7 @@ trait HighPriorityCanSimplify extends LowPriorityCanSimplify {
             .simplify(f.fns.tail.tail) :: HNil)
     }
 
-  implicit def canSimplifyEmptyProduct = new CanSimplify[Product[HNil]] {
+  implicit val canSimplifyEmptyProduct = new CanSimplify[Product[HNil]] {
     type R = ConstOne
     def simplify(f: Product[HNil]) = ConstOne()
     override def toString = "Empty Product"
@@ -196,7 +196,7 @@ trait HighPriorityCanSimplify extends LowPriorityCanSimplify {
     override def toString = s"One Element Product ($canSimplify)"
   }
 
-  implicit def canSimplifyExpZero = new CanSimplify[Exponential[ConstZero]] {
+  implicit val canSimplifyExpZero = new CanSimplify[Exponential[ConstZero]] {
     type R = ConstOne
     def simplify(f: Exponential[ConstZero]) = ConstOne()
   }
@@ -231,7 +231,7 @@ trait HighPriorityCanSimplify extends LowPriorityCanSimplify {
       def simplify(f: Logarithm[Exponential[F]]) = f.fn.fn
     }
 
-  implicit def canSimplifyLogOne = new CanSimplify[Logarithm[ConstOne]] {
+  implicit val canSimplifyLogOne = new CanSimplify[Logarithm[ConstOne]] {
     type R = ConstZero
     def simplify(f: Logarithm[ConstOne]) = ConstZero()
   }
