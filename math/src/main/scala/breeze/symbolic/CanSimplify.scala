@@ -1,5 +1,6 @@
 package breeze.symbolic
 
+import breeze.generic.{MappingUFunc, UFunc}
 import breeze.linalg.operators.{OpAdd, OpMulScalar}
 import breeze.numerics
 import shapeless.LUBConstraint._
@@ -10,13 +11,13 @@ import shapeless.{::, <:!<, HList, HNil}
   * @tparam F The type of the SymbolicFunction to simplify
   */
 trait CanSimplify[-F] {
-  type R <: SymbolicFunction
+  type R <: SymbolicFunction[R]
   def simplify(f: F): R
 }
 
 
 trait LowestPriorityCanSimplify {
-  implicit def canSimplifyIdentity[F <: SymbolicFunction] = new CanSimplify[F] {
+  implicit def canSimplifyIdentity[F <: SymbolicFunction[F]] = new CanSimplify[F] {
     type R = F
     def simplify(f: F) = f
     override def toString = "Identity"
@@ -25,7 +26,7 @@ trait LowestPriorityCanSimplify {
 
 trait LowPriorityCanSimplify extends LowestPriorityCanSimplify {
 
-  implicit def canSimplifyDifference[F1 <: SymbolicFunction, F2 <: SymbolicFunction](
+  implicit def canSimplifyDifference[F1 <: SymbolicFunction[F1], F2 <: SymbolicFunction[F2]](
     implicit canSimplify1: CanSimplify[F1],
     canSimplify2: CanSimplify[F2]
   ) =
@@ -38,7 +39,7 @@ trait LowPriorityCanSimplify extends LowestPriorityCanSimplify {
       }
     }
 
-  implicit def canSimplifySumHeadAndTail[F, L <: HList : <<:[SymbolicFunction]#λ](
+  implicit def canSimplifySumHeadAndTail[F, L <: HList : <<:[SymbolicFunction[_]]#λ](
     implicit canSimplify: CanSimplify[Sum[L]],
     canSimplifyHead: CanSimplify[F]
   ) =
@@ -51,10 +52,11 @@ trait LowPriorityCanSimplify extends LowestPriorityCanSimplify {
       }
       override def toString = s"Sum head ($canSimplifyHead) and tail ($canSimplify}"
     }
+
   implicit def canSimplifySubFunctionOfSingleArgumentFunction[
-  I, F[_] <: SingleArgumentFunction[_]](
+  I, F[I] <: SingleArgumentFunction[_, F[I]]](
     implicit canSimplify1: CanSimplify[I],
-    canBuildTwoArgumentFunction: CanBuildSingleArgumentFunction[F]
+    canBuildTwoArgumentFunction: CanBuildSingleArgumentFunction[I, F]
   ) =
     new CanSimplify[F[I]] {
       type R = F[canSimplify1.R]
@@ -65,7 +67,7 @@ trait LowPriorityCanSimplify extends LowestPriorityCanSimplify {
       override def toString = s"single argument function ($canSimplify1)"
     }
 
-  implicit def canSimplifyProductHeadAndTail[F, L <: HList : <<:[SymbolicFunction]#λ](
+  implicit def canSimplifyProductHeadAndTail[F, L <: HList : <<:[SymbolicFunction[_]]#λ](
     implicit canSimplifyHead: CanSimplify[F],
     canSimplifyTail: CanSimplify[Product[L]]
   ) =
@@ -96,7 +98,7 @@ trait HighPriorityCanSimplify extends LowPriorityCanSimplify {
     override def toString = s"1 element Sum ($canSimplify)"
   }
 
-  implicit def canSimplifyZeroPlusL[L <: HList : <<:[SymbolicFunction]#λ](
+  implicit def canSimplifyZeroPlusL[L <: HList : <<:[SymbolicFunction[_]]#λ](
     implicit canSimplify: CanSimplify[Sum[L]]) =
     new CanSimplify[Sum[ConstZero :: L]] {
       type R = canSimplify.R
@@ -115,7 +117,7 @@ trait HighPriorityCanSimplify extends LowPriorityCanSimplify {
       override def toString = s"Sum ($canSimplify) + 0"
     }
 
-  implicit def canSimplifyConstPlusConst[T, L <: HList : <<:[SymbolicFunction]#λ](
+  implicit def canSimplifyConstPlusConst[T, L <: HList : <<:[SymbolicFunction[_]]#λ](
     implicit add: OpAdd.Impl2[T, T, T],
     canSimplify: CanSimplify[Sum[L]]
   ) =
@@ -129,28 +131,28 @@ trait HighPriorityCanSimplify extends LowPriorityCanSimplify {
       override def toString = s"Sum const + const + tail ($canSimplify)"
     }
 
-  implicit def canSimplifyOneTimesF[F, L <: HList : <<:[SymbolicFunction]#λ](
-    implicit canSimplify: CanSimplify[F :: L]) =
+  implicit def canSimplifyOneTimesF[F <: SymbolicFunction[F], L <: HList : <<:[SymbolicFunction[_]]#λ](
+    implicit canSimplify: CanSimplify[Product[F :: L]]) =
     new CanSimplify[Product[ConstOne :: F :: L]] {
       type R = canSimplify.R
       def simplify(f: Product[ConstOne :: F :: L]) =
-        canSimplify.simplify(f.fns.tail)
+        canSimplify.simplify(Product(f.fns.tail))
       override def toString = s"1 * tail ($canSimplify}"
     }
 
-  implicit def canSimplifyFTimesOne[F, L <: HList : <<:[SymbolicFunction]#λ](
-    implicit canSimplify: CanSimplify[F :: L],
+  implicit def canSimplifyFTimesOne[F <: SymbolicFunction[F], L <: HList : <<:[SymbolicFunction[_]]#λ](
+    implicit canSimplify: CanSimplify[Product[F :: L]],
     // Need to XOR this with other implicits
     fIsNotOne: F <:!< ConstOne
   ) =
     new CanSimplify[Product[F :: ConstOne :: L]] {
       type R = canSimplify.R
       def simplify(f: Product[F :: ConstOne :: L]) =
-        canSimplify.simplify(f.fns.head :: f.fns.tail.tail)
+        canSimplify.simplify(Product(f.fns.head :: f.fns.tail.tail))
       override def toString = s"(head * 1 * tail) ($canSimplify)"
     }
 
-  implicit def canSimplifyZeroTimesF[I, O, L <: HList : <<:[SymbolicFunction]#λ](
+  implicit def canSimplifyZeroTimesF[I, O, L <: HList : <<:[SymbolicFunction[_]]#λ](
     // Need to XOR this with other implicits
     implicit fIsNotOne: L <:!< ConstOne
   ) =
@@ -160,7 +162,7 @@ trait HighPriorityCanSimplify extends LowPriorityCanSimplify {
       override def toString = "0 * x"
     }
 
-  implicit def canSimplifyFTimesZero[F, L <: HList : <<:[SymbolicFunction]#λ](
+  implicit def canSimplifyFTimesZero[F, L <: HList : <<:[SymbolicFunction[_]]#λ](
     // Need to XOR this with other implicits
     implicit fIsNotOne: F <:!< ConstOne,
     fIsNotZero: F <:!< ConstZero
@@ -171,16 +173,16 @@ trait HighPriorityCanSimplify extends LowPriorityCanSimplify {
       override def toString = "x * 0"
     }
 
-  implicit def canSimplifyConstTimesConst[T, L <: HList : <<:[SymbolicFunction]#λ](
+  implicit def canSimplifyConstTimesConst[T, L <: HList : <<:[SymbolicFunction[_]]#λ](
     implicit multiply: OpMulScalar.Impl2[T, T, T],
-    canSimplify: CanSimplify[L]
+    canSimplify: CanSimplify[Product[L]]
   ) =
     new CanSimplify[Product[Const[T] :: Const[T] :: L]] {
       type R = Product[Const[T] :: canSimplify.R :: HNil]
       def simplify(f: Product[Const[T] :: Const[T] :: L]) =
         Product(
           Const(multiply(f.fns.head.const, f.fns.tail.head.const)) :: canSimplify
-            .simplify(f.fns.tail.tail) :: HNil)
+            .simplify(Product(f.fns.tail.tail)) :: HNil)
     }
 
   implicit val canSimplifyEmptyProduct = new CanSimplify[Product[HNil]] {
@@ -207,7 +209,7 @@ trait HighPriorityCanSimplify extends LowPriorityCanSimplify {
       def simplify(f: Exponential[Const[T]]): R = Const(exp(f.fn.const))
     }
 
-  implicit def canSimplifyProductOfExps[F1 <: SymbolicFunction, F2 <: SymbolicFunction, L <: HList : <<:[SymbolicFunction]#λ](
+  implicit def canSimplifyProductOfExps[F1 <: SymbolicFunction[F1], F2 <: SymbolicFunction[F2], L <: HList : <<:[SymbolicFunction[_]]#λ](
     implicit canSimplify: CanSimplify[L]
   ) =
     new CanSimplify[Product[Exponential[F1] :: Exponential[F2] :: L]] {
@@ -219,13 +221,13 @@ trait HighPriorityCanSimplify extends LowPriorityCanSimplify {
             .simplify(f.fns.tail.tail) :: HNil)
     }
 
-  implicit def canSimplifyExpLog[F <: SymbolicFunction] =
+  implicit def canSimplifyExpLog[F <: SymbolicFunction[F]] =
     new CanSimplify[Exponential[Logarithm[F]]] {
       type R = F
       def simplify(f: Exponential[Logarithm[F]]) = f.fn.fn
     }
 
-  implicit def canSimplifyLogExp[F <: SymbolicFunction] =
+  implicit def canSimplifyLogExp[F <: SymbolicFunction[F]] =
     new CanSimplify[Logarithm[Exponential[F]]] {
       type R = F
       def simplify(f: Logarithm[Exponential[F]]) = f.fn.fn
@@ -250,3 +252,8 @@ object CanSimplify extends HighPriorityCanSimplify {
   }
 }
 
+object simplify extends UFunc with MappingUFunc {
+  implicit def implCanSimplify[F <: SymbolicFunction[F]](implicit canSimplify: CanSimplify[F]): Impl[F, canSimplify.R] = new Impl[F, canSimplify.R] {
+    def apply(f: F) = canSimplify.simplify(f)
+  }
+}

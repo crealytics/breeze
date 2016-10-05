@@ -1,18 +1,16 @@
 package breeze.symbolic
 
-trait CanBuildSingleArgumentFunction[F[_ <: SymbolicFunction] <: SymbolicFunction] {
-  def build[I <: SymbolicFunction](i: I): F[I]
+trait CanBuildSingleArgumentFunction[A, F[A <: SymbolicFunction[A]] <: SymbolicFunction[F[A]]] {
+  def build[I <: SymbolicFunction[I]](i: I): F[I]
 }
 
 object CanBuildSingleArgumentFunction {
-  implicit def canBuildExponential =
-    new CanBuildSingleArgumentFunction[Exponential] {
-      override def build[I <: SymbolicFunction](i: I): Exponential[I] = new Exponential(i)
+  implicit def canBuildExponential[A] = new CanBuildSingleArgumentFunction[A, Exponential] {
+      override def build[I <: SymbolicFunction[I]](i: I): Exponential[I] = new Exponential(i)
     }
 
-  implicit def canBuildLogarithm =
-    new CanBuildSingleArgumentFunction[Logarithm] {
-      override def build[I <: SymbolicFunction](i: I): Logarithm[I] = new Logarithm(i)
+  implicit def canBuildLogarithm[A] = new CanBuildSingleArgumentFunction[A, Logarithm] {
+      override def build[I <: SymbolicFunction[I]](i: I): Logarithm[I] = new Logarithm(i)
     }
 
 }

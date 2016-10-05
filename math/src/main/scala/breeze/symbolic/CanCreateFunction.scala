@@ -1,5 +1,6 @@
 package breeze.symbolic
 
+import breeze.generic.{MappingUFunc, UFunc}
 import breeze.linalg.DenseVector
 import breeze.linalg.operators.{OpAdd, OpDiv, OpMulScalar, OpSub}
 import breeze.linalg.support.CanCreateZerosLike
@@ -13,12 +14,12 @@ import shapeless.{::, HList, HNil}
   * @tparam O The output type of the Scala function
   * @tparam F The type of the SymbolicFunction from which the Scala function is created
   */
-trait CanCreateFunction[I, O, F <: SymbolicFunction] {
+trait CanCreateFunction[I, O, F <: SymbolicFunction[F]] {
   def createFunction(f: F): I => O
 }
 
 trait LowPriorityCanCreateFunction {
-  implicit def canCreateVectorizedSymbolicFunction[I, O, F <: SymbolicFunction](
+  implicit def canCreateVectorizedSymbolicFunction[I, O, F <: SymbolicFunction[F]](
     implicit canCreateFunction: CanCreateFunction[I, O, F],
     bf: breeze.linalg.support.CanMapKeyValuePairs[DenseVector[I], Int, I, O, DenseVector[O]]
   ) = new CanCreateFunction[DenseVector[I], DenseVector[O], VectorizedSymbolicFunction[F]] {
@@ -34,7 +35,7 @@ trait LowPriorityCanCreateFunction {
     def createFunction(f: Product[HNil]) = constOne.createFunction(ConstOne())
   }
 
-  implicit def canCreateProductFunction[I, O, F <: SymbolicFunction, L <: HList : <<:[SymbolicFunction]#λ](
+  implicit def canCreateProductFunction[I, O, F <: SymbolicFunction[F], L <: HList : <<:[SymbolicFunction[_]]#λ](
     implicit ccf1: CanCreateFunction[I, O, F],
     ccf2: CanCreateFunction[I, O, Product[L]],
     multiply: OpMulScalar.Impl2[O, O, O]
@@ -53,7 +54,7 @@ trait LowPriorityCanCreateFunction {
     def createFunction(f: Sum[HNil]) = constZero.createFunction(ConstZero())
   }
 
-  implicit def canCreateSumFunction[I, O, S1 <: SymbolicFunction, S2 <: HList : <<:[SymbolicFunction]#λ](
+  implicit def canCreateSumFunction[I, O, S1 <: SymbolicFunction[S1], S2 <: HList : <<:[SymbolicFunction[_]]#λ](
     implicit ccf1: CanCreateFunction[I, O, S1],
     ccf2: CanCreateFunction[I, O, Sum[S2]],
     add: OpAdd.Impl2[O, O, O]
@@ -96,7 +97,7 @@ trait LowPriorityCanCreateFunction {
         (i: T) => i
     }
 
-  implicit def canCreateLogarithmFunction[I, O, F <: SymbolicFunction](
+  implicit def canCreateLogarithmFunction[I, O, F <: SymbolicFunction[F]](
     implicit canCreateFunction: CanCreateFunction[I, O, F], log: numerics.log.Impl[O, O]) =
     new CanCreateFunction[I, O, Logarithm[F]] {
       def createFunction(f: Logarithm[F]) = {
@@ -106,7 +107,7 @@ trait LowPriorityCanCreateFunction {
       }
     }
 
-  implicit def canCreateExponentialFunction[I, O, F <: SymbolicFunction](
+  implicit def canCreateExponentialFunction[I, O, F <: SymbolicFunction[F]](
     implicit canCreateFunction: CanCreateFunction[I, O, F], exp: numerics.exp.Impl[O, O]) =
     new CanCreateFunction[I, O, Exponential[F]] {
       def createFunction(f: Exponential[F]) = {
@@ -116,7 +117,7 @@ trait LowPriorityCanCreateFunction {
       }
     }
 
-  implicit def canCreateDivisionFunction[I, O, N <: SymbolicFunction, D <: SymbolicFunction](
+  implicit def canCreateDivisionFunction[I, O, N <: SymbolicFunction[N], D <: SymbolicFunction[D]](
     implicit canCreateFunction1: CanCreateFunction[I, O, N],
     canCreateFunction2: CanCreateFunction[I, O, D],
     divide: OpDiv.Impl2[O, O, O]) =
@@ -129,7 +130,7 @@ trait LowPriorityCanCreateFunction {
       }
     }
 
-  implicit def canCreateDifferenceFunction[I, O, V <: SymbolicFunction, S <: SymbolicFunction](
+  implicit def canCreateDifferenceFunction[I, O, V <: SymbolicFunction[V], S <: SymbolicFunction[S]](
     implicit canCreateFunction1: CanCreateFunction[I, O, V],
     canCreateFunction2: CanCreateFunction[I, O, S],
     subtract: OpSub.Impl2[O, O, O]) =
@@ -142,7 +143,7 @@ trait LowPriorityCanCreateFunction {
       }
     }
 
-  implicit def canCreateChainFunction[I, O1, O2, F1 <: SymbolicFunction, F2 <: SymbolicFunction](
+  implicit def canCreateChainFunction[I, O1, O2, F1 <: SymbolicFunction[F1], F2 <: SymbolicFunction[F2]](
     implicit canCreateFunction1: CanCreateFunction[I, O1, F1],
     canCreateFunction2: CanCreateFunction[O1, O2, F2]) =
     new CanCreateFunction[I, O2, Chain[F1, F2]] {
@@ -155,13 +156,19 @@ trait LowPriorityCanCreateFunction {
 }
 
 object CanCreateFunction extends LowPriorityCanCreateFunction {
-  def apply[I, O, F <: SymbolicFunction](implicit canCreateFunction: CanCreateFunction[I, O, F]) =
+  def apply[I, O, F <: SymbolicFunction[F]](implicit canCreateFunction: CanCreateFunction[I, O, F]) =
     canCreateFunction
 
-  implicit class RichFunctionLike[F <: SymbolicFunction](f: F) {
+  implicit class RichFunctionLike[F <: SymbolicFunction[F]](f: F) {
     def toFunction[I, O](
       implicit canCreateFunction: CanCreateFunction[I, O, F]): I => O =
       canCreateFunction.createFunction(f)
   }
 
+}
+
+object toFunction extends UFunc with MappingUFunc {
+  implicit def implCanCreateFunction[I, O, F <: SymbolicFunction[F]](implicit canCreateFunction: CanCreateFunction[I, O, F]): Impl[F, I => O] = new Impl[F, I => O] {
+    def apply(f: F) = canCreateFunction.createFunction(f)
+  }
 }

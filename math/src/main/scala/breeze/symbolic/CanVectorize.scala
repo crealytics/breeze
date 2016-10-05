@@ -1,5 +1,6 @@
 package breeze.symbolic
 
+import breeze.generic.{MappingUFunc, UFunc}
 import breeze.linalg.DenseVector
 import shapeless.labelled.FieldType
 import shapeless.ops.hlist.IsHCons
@@ -18,7 +19,7 @@ trait CanVectorize[-E] {
 }
 
 trait LowestPriorityCanLift {
-  implicit def wrapSymbolicFunctions[F <: SymbolicFunction] = new CanVectorize[F] {
+  implicit def wrapSymbolicFunctions[F <: SymbolicFunction[F]] = new CanVectorize[F] {
     type V = VectorizedSymbolicFunction[F]
     override def lift(fs: Seq[F]): VectorizedSymbolicFunction[F] = {
       println(s"Couldn't lift $fs to anything better than VectorizedSymbolicFunction")
@@ -64,7 +65,7 @@ trait LowPriorityCanLift extends LowestPriorityCanLift {
 
   implicit def canVectorizeProduct[L <: HList, U <: AnyRef { type V <: HList }](
     implicit canVectorizeHListSingleton: CanVectorize.SingletonOf[CanVectorize[L], U],
-    liftedListAllSymbolicFunction: LUBConstraint[U#V, SymbolicFunction]
+    liftedListAllSymbolicFunction: LUBConstraint[U#V, SymbolicFunction[_]]
   ) = new CanVectorize[Product[L]] {
     type V = Product[U#V]
     def lift(fs: Seq[Product[L]]): V = Product(canVectorizeHListSingleton.widen.lift(fs.map(_.fns)))
@@ -72,13 +73,13 @@ trait LowPriorityCanLift extends LowestPriorityCanLift {
 
   implicit def canVectorizeSum[L <: HList, U <: AnyRef { type V <: HList }](
     implicit canVectorizeHListSingleton: CanVectorize.SingletonOf[CanVectorize[L], U],
-    liftedListAllSymbolicFunction: LUBConstraint[U#V, SymbolicFunction]
+    liftedListAllSymbolicFunction: LUBConstraint[U#V, SymbolicFunction[_]]
   ) = new CanVectorize[Sum[L]] {
     type V = Sum[U#V]
     def lift(fs: Seq[Sum[L]]): V = Sum(canVectorizeHListSingleton.widen.lift(fs.map(_.fns)))
   }
 
-  implicit def canVectorizeDifference[F1 <: SymbolicFunction, F2 <: SymbolicFunction, LF1 <: SymbolicFunction, LF2 <: SymbolicFunction](
+  implicit def canVectorizeDifference[F1 <: SymbolicFunction[F1], F2 <: SymbolicFunction[F2], LF1 <: SymbolicFunction[LF1], LF2 <: SymbolicFunction[LF2]](
     implicit canVectorizeF1: CanVectorize.Aux[F1, LF1],
     canVectorizeF2: CanVectorize.Aux[F2, LF2]
   ) = new CanVectorize[Difference[F1, F2]] {
@@ -119,4 +120,10 @@ object CanVectorize extends LowPriorityCanLift {
     }
   }
 
+}
+
+object vectorize extends UFunc with MappingUFunc {
+  implicit def implCanVectorize[F](implicit canVectorize: CanVectorize[F]): Impl[Seq[F], canVectorize.V] = new Impl[Seq[F], canVectorize.V] {
+    def apply(f: Seq[F]) = canVectorize.lift(f)
+  }
 }
