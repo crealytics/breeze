@@ -255,7 +255,8 @@ class FunctionTransformationMacros(val c: whitebox.Context) {
   def canDerive_impl[SF: c.WeakTypeTag]: c.Tree = {
     val inputType = c.weakTypeTag[SF].tpe
     val ValueAndType(value, outputType) = transform(inputType) { expr =>
-      evalEngine.evaluate(Simplify(D(expr, defaultFunctionArgument)))
+      val simplified = evalEngine.evaluate(Simplify(expr))
+      evalEngine.evaluate(D(simplified, defaultFunctionArgument))
     }
     q"""
       new breeze.symbolic.CanDerive[$inputType] {
