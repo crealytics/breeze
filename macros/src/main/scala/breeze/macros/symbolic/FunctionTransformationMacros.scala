@@ -68,7 +68,7 @@ class FunctionTransformationMacros(val c: whitebox.Context) {
   val DivisionFunc = SymbolFunction("Division")
   val ConstOneFunc = SymbolFunction("ConstOne")
   val ConstFunc = SymbolFunction("Const")
-  val NamedVarFunc = SymbolFunction("NamedVar")
+  val NamedFunc = SymbolFunction("Named")
   val VarFunc = SymbolFunction("Var")
   val ChainFunc = SymbolFunction("Chain")
 
@@ -137,8 +137,10 @@ class FunctionTransformationMacros(val c: whitebox.Context) {
             SymjaExprWithSymbolTable(variable, Map(variable -> (inner, List())))
           }
 
-          case (NamedVarFunc(_), Seq(innerType)) => {
+          case (NamedFunc(innerSF), Seq(innerType, innerFunc)) => {
             val varName = innerType match {
+              case TypeRef(SingleType(_, sym), typeSymbol, List(_, ConstantType(Constant(name)))) if typeSymbol.toString.contains("@@")=>
+                name.toString
               case TypeRef(SingleType(_, sym), _, _) => sym.name.toString
               case RefinedType(bar, _) =>
                 val List(_, TypeRef(_, _, List(constant))) = bar

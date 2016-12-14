@@ -23,9 +23,9 @@ case class Var() extends SymbolicFunction[Var] {
   override def repr: Var = this
 }
 
-case class NamedVar[N <: Symbol](implicit nameWitness: Witness.Aux[N]) extends SymbolicFunction[NamedVar[N]] {
-  override def toString = s"${nameWitness.value}"
-  override def repr: NamedVar[N] = this
+case class Named[N, F <: SymbolicFunction[F]](fn: F)(implicit nameWitness: Witness.Aux[N]) extends SymbolicFunction[Named[N, F]] {
+  override def toString = s"${nameWitness.value}:$fn"
+  override def repr: Named[N, F] = this
 }
 
 case class Identity[T]() extends SymbolicFunction[Identity[T]] {

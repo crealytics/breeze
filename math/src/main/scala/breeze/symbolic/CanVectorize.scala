@@ -36,6 +36,14 @@ trait LowestPriorityCanVectorize {
 }
 
 trait LowPriorityCanVectorize extends LowestPriorityCanVectorize {
+  implicit def canVectorizeNamed[N, F <: SymbolicFunction[F], VF <: SymbolicFunction[VF]](
+    implicit canVectorizeF: CanVectorize.Aux[F, VF],
+    nameWitness: shapeless.Witness.Aux[N]
+  ): CanVectorize.Aux[Named[N, F], Named[N, VF]] =
+    new AbstractCanVectorize[Named[N, F]]("Named") {
+      type V = Named[N, VF]
+      def vectorize(fs: Seq[Named[N, F]]) = Named[N, VF](canVectorizeF.vectorize(fs.map(_.fn)))
+    }
 
   implicit def canVectorizeConst[T: ClassTag]: CanVectorize.Aux[Const[T], Const[DenseVector[T]]] =
     new AbstractCanVectorize[Const[T]]("Const") {

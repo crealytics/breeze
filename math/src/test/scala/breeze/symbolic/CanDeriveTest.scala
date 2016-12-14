@@ -4,6 +4,7 @@ import org.junit.runner.RunWith
 import org.scalatest.{FunSuite, Matchers}
 import org.scalatest.junit.JUnitRunner
 import org.scalatest.prop.Checkers
+import shapeless.Witness
 
 /**
   * These tests check that for a function <code>f</code> and a point <code>x</code>
@@ -33,6 +34,11 @@ class CanDeriveTest extends FunSuite with Checkers with Matchers {
   test("derives chains") {
     val func = Chain(complicatedFunction, Var() *:* Const(0.5) +:+ Const(15.0))
     testDerivation(func)
+  }
+
+  test("derives named functions") {
+    val namedFunc = Var() *:* Exponential(Var() - Named(Const(1.0))(Witness('firstCons)) +:+ Division(Named(Const(3.0))(Witness('secondConst)), Var() +:+ Const(50.0))) +:+ Var()
+    testDerivation(namedFunc)
   }
 
   def testDerivation[SF <: SymbolicFunction[SF], D <: SymbolicFunction[D]](sf: SF)(

@@ -137,10 +137,16 @@ trait LowPriorityCanCreateFunction {
       }
     }
 
-  implicit def canCreateNamedVarFunction[T, S <: Symbol]: CanCreateFunction[T, T, NamedVar[S]] =
-    new CanCreateFunction[T, T, NamedVar[S]] {
-      def createFunction(f: NamedVar[S]) = new (T => T) {
-        def apply(i: T) = i
+  implicit def canCreateNamedFunction[
+    I,
+    O,
+    S,
+    F <: SymbolicFunction[F]
+  ](implicit canCreateFunction: CanCreateFunction[I, O, F]): CanCreateFunction[I, O, Named[S, F]] =
+    new CanCreateFunction[I, O, Named[S, F]] {
+      def createFunction(f: Named[S, F]) = new (I => O) {
+        val innerFunc = canCreateFunction.createFunction(f.fn)
+        def apply(i: I) = innerFunc(i)
         override def toString = f.toString
       }
     }

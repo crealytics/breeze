@@ -6,6 +6,7 @@ import org.junit.runner.RunWith
 import org.scalatest.{FunSuite, Matchers}
 import org.scalatest.junit.JUnitRunner
 import org.scalatest.prop.Checkers
+import shapeless.{HNil, Witness, ::}
 
 /**
   * These tests check that vectorizing a <code>Seq[SymbolicFunction[_]]</code> yields the same values
@@ -27,6 +28,30 @@ class CanVectorizeTest extends FunSuite with Checkers with Matchers {
     testVectorization(complicatedFunction)
   }
 
+
+  test("vectorizes named functions") {
+    val namedFunc = Exponential(Var() +:+ Named(Const(1.0))(Witness("one")) +:+ Named(Const(3.0))(Witness("three")))
+    // Test type correctness by fixing the inferred type parameters to the expected type
+    testVectorization[
+      Exponential[
+        Sum[
+          Var ::
+            Named[Witness.`"one"`.T, Const[Double]] ::
+            Named[Witness.`"three"`.T, Const[Double]] ::
+            HNil
+          ]
+        ],
+      Exponential[
+        Sum[
+          Var ::
+            Named[Witness.`"one"`.T, Const[DenseVector[Double]]] ::
+            Named[Witness.`"three"`.T, Const[DenseVector[Double]]] ::
+            HNil
+          ]
+        ]
+      ](namedFunc)
+  }
+
   test("vectorizes shapeless records") {
     import shapeless._
     import shapeless.record._
@@ -41,9 +66,10 @@ class CanVectorizeTest extends FunSuite with Checkers with Matchers {
     implicit canCreateFunction: CanCreateFunction[Double, Double, SF],
     canVectorize: CanVectorize.Aux[SF, SFV],
     canCreateVectorizedFunction: CanCreateFunction[DenseVector[Double], DenseVector[Double], SFV]
-  ): Unit = {
+  ): SFV = {
     val vectorizedSymbolicFunction = canVectorize.vectorize(Seq(sf))
     compareOriginalAndVectorized(sf, vectorizedSymbolicFunction)
+    vectorizedSymbolicFunction
   }
 
   def compareOriginalAndVectorized[SFV <: SymbolicFunction[SFV], SF <: SymbolicFunction[SF]](
