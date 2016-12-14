@@ -24,9 +24,19 @@ trait LowPriorityCanCreateFunction {
     bf: breeze.linalg.support.CanMapKeyValuePairs[DenseVector[I], Int, I, O, DenseVector[O]]
   ): CanCreateFunction[DenseVector[I], DenseVector[O], VectorizedSymbolicFunction[F]] =
     new CanCreateFunction[DenseVector[I], DenseVector[O], VectorizedSymbolicFunction[F]] {
-      override def createFunction(f: VectorizedSymbolicFunction[F]): (DenseVector[I]) => DenseVector[O] = {
+      override def createFunction(
+        f: VectorizedSymbolicFunction[F]
+      ): DenseVector[I] => DenseVector[O] = {
         val convertedFunctions = f.fs.map(canCreateFunction.createFunction).toArray
-        (i: DenseVector[I]) => i.mapPairs { case (index, value) => convertedFunctions(index).apply(value) }
+        new (DenseVector[I] => DenseVector[O]) {
+          def apply(i: DenseVector[I]) = {
+            i.mapPairs({
+                case (index, value) => convertedFunctions(index).apply(value)
+              }
+            )
+          }
+          override def toString = f.toString
+        }
       }
     }
 
@@ -37,7 +47,13 @@ trait LowPriorityCanCreateFunction {
       def createFunction(f: Product[HNil]) = constOne.createFunction(ConstOne())
     }
 
-  implicit def canCreateProductScalarFunction[I, O1, O2, F <: SymbolicFunction[F], L <: HList : <<:[SymbolicFunction[_]]#λ](
+  implicit def canCreateProductScalarFunction[
+    I,
+    O1,
+    O2,
+    F <: SymbolicFunction[F],
+    L <: HList: <<:[SymbolicFunction[_]]#λ
+  ](
     implicit ccf1: CanCreateFunction[I, O1, F],
     ccf2: CanCreateFunction[I, O2, Product[L]],
     multiply: OpMulMatrix.Impl2[O1, O2, O1]
@@ -45,8 +61,12 @@ trait LowPriorityCanCreateFunction {
     def createFunction(f: Product[F :: L]) = {
       val f1 = ccf1.createFunction(f.fns.head)
       val f2 = ccf2.createFunction(Product(f.fns.tail))
-                                  (i: I) =>
-      multiply(f1(i), f2(i))
+      new (I => O1) {
+        def apply(i: I) = {
+          multiply(f1(i), f2(i))
+        }
+        override def toString = f.toString
+      }
     }
   }
 
@@ -57,7 +77,12 @@ trait LowPriorityCanCreateFunction {
       def createFunction(f: Sum[HNil]) = constZero.createFunction(ConstZero())
     }
 
-  implicit def canCreateSumFunction[I, O, S1 <: SymbolicFunction[S1], S2 <: HList : <<:[SymbolicFunction[_]]#λ](
+  implicit def canCreateSumFunction[
+    I,
+    O,
+    S1 <: SymbolicFunction[S1],
+    S2 <: HList: <<:[SymbolicFunction[_]]#λ
+  ](
     implicit ccf1: CanCreateFunction[I, O, S1],
     ccf2: CanCreateFunction[I, O, Sum[S2]],
     add: OpAdd.Impl2[O, O, O]
@@ -66,70 +91,97 @@ trait LowPriorityCanCreateFunction {
       def createFunction(f: Sum[S1 :: S2]) = {
         val f1 = ccf1.createFunction(f.fns.head)
         val f2 = ccf2.createFunction(Sum(f.fns.tail))
-        (i: I) =>
-          add(f1(i), f2(i))
+        new (I => O) {
+          def apply(i: I) = {
+            add(f1(i), f2(i))
+          }
+          override def toString = f.toString
+        }
       }
     }
 
   implicit def canCreateConstantFunction[I, O]: CanCreateFunction[I, O, Const[O]] =
     new CanCreateFunction[I, O, Const[O]] {
-      def createFunction(f: Const[O]) =
-        (i: I) => f.const
+      def createFunction(f: Const[O]) = new (I => O) {
+        def apply(i: I) = f.const
+        override def toString = f.toString
+      }
     }
 
   implicit def canCreateConstantZeroFunction[I, O](
     implicit zero: CanCreateZerosLike[I, O]
   ): CanCreateFunction[I, O, ConstZero] =
     new CanCreateFunction[I, O, ConstZero] {
-      def createFunction(f: ConstZero) =
-        (i: I) => zero(i)
+      def createFunction(f: ConstZero) = new (I => O) {
+        def apply(i: I) = zero(i)
+        override def toString = f.toString
+      }
     }
 
   implicit def canCreateConstantOneFunction[I, O](
-    implicit zero: CanCreateZerosLike[I, O], exp: numerics.exp.Impl[O, O]
+    implicit zero: CanCreateZerosLike[I, O],
+    exp: numerics.exp.Impl[O, O]
   ): CanCreateFunction[I, O, ConstOne] =
     new CanCreateFunction[I, O, ConstOne] {
-      def createFunction(f: ConstOne) =
-        (i: I) => exp(zero(i))
+      def createFunction(f: ConstOne) = new (I => O) {
+        def apply(i: I) = exp(zero(i))
+        override def toString = f.toString
+      }
     }
 
   implicit def canCreateVarFunction[T]: CanCreateFunction[T, T, Var] =
     new CanCreateFunction[T, T, Var] {
-      def createFunction(f: Var) =
-        (i: T) => i
+      def createFunction(f: Var) = new (T => T) {
+        def apply(i: T) = i
+        override def toString = f.toString
+      }
     }
 
   implicit def canCreateNamedVarFunction[T, S <: Symbol]: CanCreateFunction[T, T, NamedVar[S]] =
     new CanCreateFunction[T, T, NamedVar[S]] {
-      def createFunction(f: NamedVar[S]) =
-        (i: T) => i
+      def createFunction(f: NamedVar[S]) = new (T => T) {
+        def apply(i: T) = i
+        override def toString = f.toString
+      }
     }
 
   implicit def canCreateIdentityFunction[T]: CanCreateFunction[T, T, Identity[T]] =
     new CanCreateFunction[T, T, Identity[T]] {
-      def createFunction(f: Identity[T]) =
-        (i: T) => i
+      def createFunction(f: Identity[T]) = new (T => T) {
+        def apply(i: T) = i
+        override def toString = f.toString
+      }
     }
 
   implicit def canCreateLogarithmFunction[I, O, F <: SymbolicFunction[F]](
-    implicit canCreateFunction: CanCreateFunction[I, O, F], log: numerics.log.Impl[O, O]
+    implicit canCreateFunction: CanCreateFunction[I, O, F],
+    log: numerics.log.Impl[O, O]
   ): CanCreateFunction[I, O, Logarithm[F]] =
     new CanCreateFunction[I, O, Logarithm[F]] {
       def createFunction(f: Logarithm[F]) = {
         val fn = canCreateFunction.createFunction(f.fn)
-        (i: I) =>
-          log(fn(i))
+        new (I => O) {
+          def apply(i: I) = {
+            log(fn(i))
+          }
+          override def toString = f.toString
+        }
       }
     }
 
   implicit def canCreateExponentialFunction[I, O, F <: SymbolicFunction[F]](
-    implicit canCreateFunction: CanCreateFunction[I, O, F], exp: numerics.exp.Impl[O, O]
+    implicit canCreateFunction: CanCreateFunction[I, O, F],
+    exp: numerics.exp.Impl[O, O]
   ): CanCreateFunction[I, O, Exponential[F]] =
     new CanCreateFunction[I, O, Exponential[F]] {
       def createFunction(f: Exponential[F]) = {
         val fn = canCreateFunction.createFunction(f.fn)
-        (i: I) =>
-          exp(fn(i))
+        new (I => O) {
+          def apply(i: I) = {
+            exp(fn(i))
+          }
+          override def toString = f.toString
+        }
       }
     }
 
@@ -142,11 +194,14 @@ trait LowPriorityCanCreateFunction {
       def createFunction(f: Power[F, E]) = {
         val fn = canCreateFunction.createFunction(f.fn)
         val exp = canCreateExpFunction.createFunction(f.exp)
-        (i: I) =>
-          pow(fn(i), exp(i))
+        new (I => O) {
+          def apply(i: I) = {
+            pow(fn(i), exp(i))
+          }
+          override def toString = f.toString
+        }
       }
     }
-
 
   implicit def canCreateDivisionFunction[I, O, N <: SymbolicFunction[N], D <: SymbolicFunction[D]](
     implicit canCreateFunction1: CanCreateFunction[I, O, N],
@@ -157,12 +212,21 @@ trait LowPriorityCanCreateFunction {
       def createFunction(f: Division[N, D]) = {
         val f1 = canCreateFunction1.createFunction(f.fn1)
         val f2 = canCreateFunction2.createFunction(f.fn2)
-        (i: I) =>
-          divide(f1(i), f2(i))
+        new (I => O) {
+          def apply(i: I) = {
+            divide(f1(i), f2(i))
+          }
+          override def toString = f.toString
+        }
       }
     }
 
-  implicit def canCreateDifferenceFunction[I, O, V <: SymbolicFunction[V], S <: SymbolicFunction[S]](
+  implicit def canCreateDifferenceFunction[
+    I,
+    O,
+    V <: SymbolicFunction[V],
+    S <: SymbolicFunction[S]
+  ](
     implicit canCreateFunction1: CanCreateFunction[I, O, V],
     canCreateFunction2: CanCreateFunction[I, O, S],
     subtract: OpSub.Impl2[O, O, O]
@@ -171,12 +235,22 @@ trait LowPriorityCanCreateFunction {
       def createFunction(f: Difference[V, S]) = {
         val f1 = canCreateFunction1.createFunction(f.fn1)
         val f2 = canCreateFunction2.createFunction(f.fn2)
-        (i: I) =>
-          subtract(f1(i), f2(i))
+        new (I => O) {
+          def apply(i: I) = {
+            subtract(f1(i), f2(i))
+          }
+          override def toString = f.toString
+        }
       }
     }
 
-  implicit def canCreateChainFunction[I, O1, O2, Outer <: SymbolicFunction[Outer], Inner <: SymbolicFunction[Inner]](
+  implicit def canCreateChainFunction[
+    I,
+    O1,
+    O2,
+    Outer <: SymbolicFunction[Outer],
+    Inner <: SymbolicFunction[Inner]
+  ](
     implicit canCreateOuterFunction: CanCreateFunction[O1, O2, Outer],
     canCreateInnerFunction: CanCreateFunction[I, O1, Inner]
   ): CanCreateFunction[I, O2, Chain[Outer, Inner]] =
@@ -191,7 +265,12 @@ trait LowPriorityCanCreateFunction {
 
 trait MediumPriorityCanCreateFunction extends LowPriorityCanCreateFunction {
 
-  implicit def canCreateProductFunction[I, O, F <: SymbolicFunction[F], L <: HList : <<:[SymbolicFunction[_]]#λ](
+  implicit def canCreateProductFunction[
+    I,
+    O,
+    F <: SymbolicFunction[F],
+    L <: HList: <<:[SymbolicFunction[_]]#λ
+  ](
     implicit ccf1: CanCreateFunction[I, O, F],
     ccf2: CanCreateFunction[I, O, Product[L]],
     multiply: OpMulScalar.Impl2[O, O, O]
@@ -200,35 +279,41 @@ trait MediumPriorityCanCreateFunction extends LowPriorityCanCreateFunction {
       def createFunction(f: Product[F :: L]) = {
         val f1 = ccf1.createFunction(f.fns.head)
         val f2 = ccf2.createFunction(Product(f.fns.tail))
-                                    (i: I) =>
-        multiply(f1(i), f2(i))
+        new (I => O) {
+          def apply(i: I) = {
+            multiply(f1(i), f2(i))
+          }
+          override def toString = f.toString
+        }
       }
     }
 
-  implicit def canCreateDenseVectorConstantScalarFunction: CanCreateFunction[DenseVector[Double], DenseVector[Double], Const[Double]] =
+  implicit def canCreateDenseVectorConstantScalarFunction: CanCreateFunction[
+    DenseVector[Double],
+    DenseVector[Double],
+    Const[Double]
+  ] =
     new CanCreateFunction[DenseVector[Double], DenseVector[Double], Const[Double]] {
-      def createFunction(f: Const[Double]) =
-        (i: DenseVector[Double]) => DenseVector.fill(i.length, f.const)
+      def createFunction(f: Const[Double]) = new (DenseVector[Double] => DenseVector[Double]) {
+        def apply(i: DenseVector[Double]) = DenseVector.fill(i.length, f.const)
+        override def toString = f.toString
+      }
     }
-
 }
 
 object CanCreateFunction extends MediumPriorityCanCreateFunction {
-  def apply[I, O, F <: SymbolicFunction[F]](implicit canCreateFunction: CanCreateFunction[I, O, F]) =
-    canCreateFunction
-
+  def apply[I, O, F <: SymbolicFunction[F]](
+    implicit canCreateFunction: CanCreateFunction[I, O, F]
+  ) = canCreateFunction
   implicit class RichFunctionLike[F <: SymbolicFunction[F]](f: F) {
-    def toFunction[I, O](
-      implicit canCreateFunction: CanCreateFunction[I, O, F]): I => O =
+    def toFunction[I, O](implicit canCreateFunction: CanCreateFunction[I, O, F]): I => O =
       canCreateFunction.createFunction(f)
   }
-
 }
 
 object toFunction extends UFunc with MappingUFunc {
   implicit def implCanCreateFunction[I, O, F <: SymbolicFunction[F]](
     implicit canCreateFunction: CanCreateFunction[I, O, F]
-  ): Impl[F, I => O] = new Impl[F, I => O] {
-    def apply(f: F) = canCreateFunction.createFunction(f)
-  }
+  ): Impl[F, I => O] =
+    new Impl[F, I => O] { def apply(f: F) = canCreateFunction.createFunction(f) }
 }
