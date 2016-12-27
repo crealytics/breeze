@@ -4,10 +4,9 @@ import scala.language.experimental.macros
 import scala.reflect.macros.whitebox
 import scala.collection.JavaConverters._
 import org.matheclipse.core.expression._
-import F.{Map => _, List => _, _}
-import org.matheclipse.core.interfaces.IExpr
+import F.{List => _, Map => _, _}
+import org.matheclipse.core.interfaces.{IAST, IExpr, ISymbol => SymjaSymbol}
 import org.matheclipse.core.eval.EvalEngine
-import org.matheclipse.core.interfaces.{ISymbol => SymjaSymbol}
 import org.matheclipse.core.expression.{Symbol => SymjaSymbolImpl}
 import org.matheclipse.core.generic.Functors
 
@@ -37,8 +36,8 @@ class FunctionTransformationMacros(val c: whitebox.Context) {
       def unapplySeq(i: IExpr): Option[Seq[O]] = pf.lift.apply(i)
     }
 
-    val Times = SeqExtractor[IExpr] { case e if e.isTimes => e.leaves.asScala }
-    val Plus = SeqExtractor[IExpr] { case e if e.isPlus => e.leaves.asScala }
+    val Times = SeqExtractor[IExpr] { case e if e.isTimes => e.asInstanceOf[IAST].iterator().asScala.toVector }
+    val Plus = SeqExtractor[IExpr] { case e if e.isPlus => e.asInstanceOf[IAST].iterator().asScala.toVector }
     val Exponential = Extractor[IExpr] { case e if e.isPower && e.getAt(1).equals(F.E) => e.getAt(2) }
     val Power = Extractor[(IExpr, IExpr)] { case e if e.isPower => (e.getAt(1), e.getAt(2)) }
     val Logarithm = Extractor[IExpr] { case e if e.isLog => e.getAt(1) }
@@ -47,7 +46,7 @@ class FunctionTransformationMacros(val c: whitebox.Context) {
     val Derivation = Extractor[IExpr] { case e if e.isAST("D", 3) => e.getAt(1).getAt(0) }
     val Numeric = Extractor[Double] { case e if e.isNumeric => e.asInstanceOf[Num].doubleValue() }
     val Function = Extractor[SymjaSymbol] {
-      case e: AST if e.head().asInstanceOf[SymjaSymbolImpl].getSymbol.startsWith("fun") => e.head().asInstanceOf[SymjaSymbol]
+      case e: AST if e.head().asInstanceOf[SymjaSymbolImpl].getSymbolName.startsWith("fun") => e.head().asInstanceOf[SymjaSymbol]
     }
   }
 
@@ -157,7 +156,7 @@ class FunctionTransformationMacros(val c: whitebox.Context) {
           case (ChainFunc(_), CasFunction(outerFunc, innerFunc)) =>
             outerFunc.withPrependedPath("outer").mergeWith(innerFunc.withPrependedPath("inner"), (o, i) => F.subst(o, Functors.rules(Rule(defaultFunctionArgument, i))))
           case _ =>
-            val functionName = F.local(s"fun${inner.hashCode}")
+            val functionName = new SymjaSymbolImpl(s"fun${inner.hashCode}")
             SymjaExprWithSymbolTable(F.unary(functionName, defaultFunctionArgument), Map(functionName -> (inner, List())))
         }
       }
